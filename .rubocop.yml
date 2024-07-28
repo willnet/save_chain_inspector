@@ -1,2 +1,15 @@
 AllCops:
   TargetRubyVersion: 3.0
+  SuggestExtensions: false
+  NewCops: enable
+Layout/LineLength:
+  Exclude:
+    - save_chain_inspector.gemspec
+Metrics/BlockLength:
+  Exclude:
+    - 'Rakefile'
+    - '**/*.rake'
+    - 'spec/**/*.rb'
+    - 'Gemfile'
+    - '*.gemspec'
+
