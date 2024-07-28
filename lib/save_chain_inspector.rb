@@ -65,58 +65,58 @@ class SaveChainInspector
 
   attr_accessor :last_call_method, :last_call_class, :last_return_method, :last_return_class
 
-  def autosave_method?(tp)
-    tp.method_id.match?(/autosave_associated_records_for_/)
+  def autosave_method?(trace_point)
+    trace_point.method_id.match?(/autosave_associated_records_for_/)
   end
 
-  def save_method?(tp)
-    tp.method_id == :save || tp.method_id == :save!
+  def save_method?(trace_point)
+    trace_point.method_id == :save || trace_point.method_id == :save!
   end
 
-  def duplicate_save_method_call?(tp)
-    last_call_method == tp.method_id && last_call_class == tp.self.class
+  def duplicate_save_method_call?(trace_point)
+    last_call_method == trace_point.method_id && last_call_class == trace_point.self.class
   end
 
-  def duplicate_save_method_return?(tp)
-    last_return_method == tp.method_id && last_return_class == tp.self.class
+  def duplicate_save_method_return?(trace_point)
+    last_return_method == trace_point.method_id && last_return_class == trace_point.self.class
   end
 
-  def autosave_to_save?(tp)
-    (tp.method_id == :save || tp.method_id == :save!) && last_call_method&.match?(/autosave_associated_records_for_/)
+  def autosave_to_save?(trace_point)
+    (trace_point.method_id == :save || trace_point.method_id == :save!) && last_call_method&.match?(/autosave_associated_records_for_/)
   end
 
-  def update_last_call(tp)
-    self.last_call_class = tp.self.class
-    self.last_call_method = tp.method_id
+  def update_last_call(trace_point)
+    self.last_call_class = trace_point.self.class
+    self.last_call_method = trace_point.method_id
   end
 
-  def update_last_return(tp)
-    self.last_return_class = tp.self.class
-    self.last_return_method = tp.method_id
+  def update_last_return(trace_point)
+    self.last_return_class = trace_point.self.class
+    self.last_return_method = trace_point.method_id
   end
 
   def call(&block)
-    trace = TracePoint.new(:call, :return) do |tp|
-      if tp.event == :call
-        if autosave_method?(tp)
-          update_last_call(tp)
-          puts "#{' ' * (self.class.indent * 2)}#{tp.self.class.name}##{tp.method_id} start"
+    trace = TracePoint.new(:call, :return) do |trace_point|
+      if trace_point.event == :call
+        if autosave_method?(trace_point)
+          update_last_call(trace_point)
+          puts "#{' ' * (self.class.indent * 2)}#{trace_point.self.class.name}##{trace_point.method_id} start"
           self.class.indent += 1
-        elsif save_method?(tp) && !duplicate_save_method_call?(tp)
-          update_last_call(tp)
-          puts "#{' ' * (self.class.indent * 2)}#{tp.self.class.name}##{tp.method_id} start"
+        elsif save_method?(trace_point) && !duplicate_save_method_call?(trace_point)
+          update_last_call(trace_point)
+          puts "#{' ' * (self.class.indent * 2)}#{trace_point.self.class.name}##{trace_point.method_id} start"
           self.class.indent += 1
         end
       else # :return
-        if save_method?(tp) && !duplicate_save_method_return?(tp)
+        if save_method?(trace_point) && !duplicate_save_method_return?(trace_point)
           self.class.indent -= 1
-          update_last_return(tp)
-          puts "#{' ' * (self.class.indent * 2)}#{tp.self.class.name}##{tp.method_id} end"
+          update_last_return(trace_point)
+          puts "#{' ' * (self.class.indent * 2)}#{trace_point.self.class.name}##{trace_point.method_id} end"
         end
 
-        if autosave_method?(tp)
+        if autosave_method?(trace_point)
           self.class.indent -= 1
-          puts "#{' ' * (self.class.indent * 2)}#{tp.self.class.name}##{tp.method_id} end"
+          puts "#{' ' * (self.class.indent * 2)}#{trace_point.self.class.name}##{trace_point.method_id} end"
         end
       end
     end
