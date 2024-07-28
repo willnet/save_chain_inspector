@@ -1,24 +1,43 @@
 # SaveChainInspector
 
-TODO: Delete this and the text below, and describe your gem
-
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/save_chain_inspector`. To experiment with that code, run `bin/console` for an interactive prompt.
+When you execute save on a model in Active Record, the saves of related models with pre-set hooks are also executed. SaveChainInspector provides a way to know which models and which hooks have been executed specifically.
 
 ## Installation
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
-
 Install the gem and add to the application's Gemfile by executing:
 
-    $ bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+    $ bundle add save_chain_inspector --group=development,test
 
 If bundler is not being used to manage dependencies, install the gem by executing:
 
-    $ gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+    $ gem install save_chain_inspector
 
 ## Usage
 
-TODO: Write usage instructions here
+`SaveChainInspector.start` takes a block. It outputs the execution order of the save chain to the standard output.
+
+```ruby      
+SaveChainInspector.start do
+  post = Post.new
+  post.comments.build
+  post.save
+end
+```
+
+```
+Post#save start
+ Post#autosave_associated_records_for_comments start
+   Comment#save start
+     Comment#before_save start
+       Comment#autosave_associated_records_for_post start
+       Comment#autosave_associated_records_for_post end
+     Comment#before_save end
+     Comment#after_create start
+     Comment#after_create end
+   Comment#save end
+ Post#autosave_associated_records_for_comments end
+Post#save end
+```
 
 ## Development
 
@@ -28,7 +47,7 @@ To install this gem onto your local machine, run `bundle exec rake install`. To 
 
 ## Contributing
 
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/save_chain_inspector. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/save_chain_inspector/blob/main/CODE_OF_CONDUCT.md).
+Bug reports and pull requests are welcome on GitHub at https://github.com/willnet/save_chain_inspector. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/willnet/save_chain_inspector/blob/main/CODE_OF_CONDUCT.md).
 
 ## License
 
@@ -36,4 +55,4 @@ The gem is available as open source under the terms of the [MIT License](https:/
 
 ## Code of Conduct
 
-Everyone interacting in the SaveChainInspector project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/save_chain_inspector/blob/main/CODE_OF_CONDUCT.md).
+Everyone interacting in the SaveChainInspector project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/willnet/save_chain_inspector/blob/main/CODE_OF_CONDUCT.md).
