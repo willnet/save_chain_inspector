@@ -20,9 +20,9 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
   def initialize
     ActiveRecord::Base.descendants.each do |klass|
       next if klass.abstract_class
-      next if @save_chain_inspector_initialized
+      next if klass.instance_variable_get(:@save_chain_inspector_initialized)
 
-      @save_chain_inspector_initialized = true
+      klass.instance_variable_set(:@save_chain_inspector_initialized, true)
       add_hooks(klass)
     end
   end
