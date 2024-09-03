@@ -23,7 +23,7 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
     end
 
     def decrement_indent
-      self.indent_count -= 1
+      self.indent_count -= 1 if indent_count.positive?
     end
   end
 
