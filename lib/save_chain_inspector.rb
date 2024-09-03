@@ -7,8 +7,6 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
     attr_accessor :indent, :enable
   end
 
-  self.indent = 0
-  self.enable = false
   def self.start(&block)
     self.indent = 0
     self.enable = true
