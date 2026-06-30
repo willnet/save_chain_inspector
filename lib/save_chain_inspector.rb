@@ -6,17 +6,10 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
   SAVE_METHODS = %i[save save!].freeze
 
   class << self
-    attr_accessor :indent_count, :enable, :pending_start
+    attr_accessor :indent_count, :enable, :pending_start, :output
 
-    def start(&block)
-      self.indent_count = 0
-      self.pending_start = nil
-      self.enable = true
-      new.call(&block)
-    ensure
-      flush_pending_start
-      self.enable = false
-      self.pending_start = nil
+    def start(to: $stdout, &block)
+      with_output(to) { inspect_save_chain(&block) }
     end
 
     def indent
@@ -36,7 +29,7 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
       if collapsible
         self.pending_start = [indent_count, label]
       else
-        puts "#{indent}#{label} start"
+        write_log "#{indent}#{label} start"
       end
       increment_indent
     end
@@ -44,11 +37,11 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
     def log_end(label, collapsible: true)
       decrement_indent
       if collapsible && pending_start == [indent_count, label]
-        puts "#{indent}#{label} start/end"
+        write_log "#{indent}#{label} start/end"
         self.pending_start = nil
       else
         flush_pending_start
-        puts "#{indent}#{label} end"
+        write_log "#{indent}#{label} end"
       end
     end
 
@@ -56,8 +49,44 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
       return unless pending_start
 
       pending_indent_count, label = pending_start
-      puts "#{' ' * (pending_indent_count * 2)}#{label} start"
+      write_log "#{' ' * (pending_indent_count * 2)}#{label} start"
       self.pending_start = nil
+    end
+
+    def write_log(message)
+      output.puts(message)
+    end
+
+    private
+
+    def inspect_save_chain(&block)
+      self.indent_count = 0
+      self.pending_start = nil
+      self.enable = true
+      new.call(&block)
+    ensure
+      flush_pending_start
+      self.enable = false
+      self.pending_start = nil
+    end
+
+    def with_output(to)
+      self.output, close_output = output_for(to)
+      yield
+    ensure
+      output.close if close_output
+      self.output = nil
+    end
+
+    def output_for(to)
+      return [to, false] if to.respond_to?(:puts)
+      return [File.open(to, 'w'), true] if path_like?(to)
+
+      raise ArgumentError, 'to must be a path or an object that responds to #puts'
+    end
+
+    def path_like?(object)
+      object.is_a?(String) || object.respond_to?(:to_path)
     end
   end
 

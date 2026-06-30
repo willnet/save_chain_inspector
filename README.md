@@ -14,7 +14,7 @@ If bundler is not being used to manage dependencies, install the gem by executin
 
 ## Usage
 
-`SaveChainInspector.start` takes a block. It outputs the execution order of the save chain to the standard output.
+`SaveChainInspector.start` takes a block. It outputs the execution order of the save chain to the standard output by default.
 
 ```ruby      
 SaveChainInspector.start do
@@ -38,6 +38,16 @@ Post#save start
     Post#autosave_associated_records_for_comments end
   Post#after_create end
 Post#save end
+```
+
+Pass a path to `to:` to write the output to a file instead. The file is overwritten.
+
+```ruby
+SaveChainInspector.start(to: "tmp/save_chain.log") do
+  post = Post.new
+  post.comments.build
+  post.save
+end
 ```
 
 ## Development
