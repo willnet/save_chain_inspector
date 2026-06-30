@@ -14,8 +14,25 @@ end
 
 class Post < ActiveRecord::Base
   has_many :comments
+
+  before_validation :prepare_post
+  before_save :normalize_post
+  before_save :skipped_post_callback, if: -> { false }
+  after_create :notify_created
+
+  def prepare_post; end
+
+  def normalize_post; end
+
+  def skipped_post_callback; end
+
+  def notify_created; end
 end
 
 class Comment < ActiveRecord::Base
   belongs_to :post
+
+  before_save :normalize_comment
+
+  def normalize_comment; end
 end

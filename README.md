@@ -26,16 +26,21 @@ end
 
 ```
 Post#save start
-  Post#before_save start/end
+  Post#prepare_post start/end
+  Post#before_save start
+    Post#normalize_post start/end
+  Post#before_save end
   Post#after_create start
     Post#autosave_associated_records_for_comments start
       Comment#save start
         Comment#before_save start
           Comment#autosave_associated_records_for_post start/end
+          Comment#normalize_comment start/end
         Comment#before_save end
         Comment#after_create start/end
       Comment#save end
     Post#autosave_associated_records_for_comments end
+    Post#notify_created start/end
   Post#after_create end
 Post#save end
 ```
