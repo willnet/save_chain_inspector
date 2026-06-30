@@ -2,8 +2,9 @@
 
 source 'https://rubygems.org'
 
-gemspec
+gemspec path: File.expand_path('..', __dir__)
 
+gem 'activerecord', '~> 8.1.0'
 gem 'rake', '~> 13.0'
 gem 'rspec', '~> 3.0'
 gem 'rubocop', '~> 1.21'
