@@ -6,14 +6,17 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
   SAVE_METHODS = %i[save save!].freeze
 
   class << self
-    attr_accessor :indent_count, :enable
+    attr_accessor :indent_count, :enable, :pending_start
 
     def start(&block)
       self.indent_count = 0
+      self.pending_start = nil
       self.enable = true
       new.call(&block)
     ensure
+      flush_pending_start
       self.enable = false
+      self.pending_start = nil
     end
 
     def indent
@@ -26,6 +29,35 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
 
     def decrement_indent
       self.indent_count -= 1 if indent_count.positive?
+    end
+
+    def log_start(label, collapsible: true)
+      flush_pending_start
+      if collapsible
+        self.pending_start = [indent_count, label]
+      else
+        puts "#{indent}#{label} start"
+      end
+      increment_indent
+    end
+
+    def log_end(label, collapsible: true)
+      decrement_indent
+      if collapsible && pending_start == [indent_count, label]
+        puts "#{indent}#{label} start/end"
+        self.pending_start = nil
+      else
+        flush_pending_start
+        puts "#{indent}#{label} end"
+      end
+    end
+
+    def flush_pending_start
+      return unless pending_start
+
+      pending_indent_count, label = pending_start
+      puts "#{' ' * (pending_indent_count * 2)}#{label} start"
+      self.pending_start = nil
     end
   end
 
@@ -45,38 +77,32 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
     klass.before_save(prepend: true) do |model|
       next unless SaveChainInspector.enable
 
-      puts "#{SaveChainInspector.indent}#{model.class}#before_save start"
-      SaveChainInspector.increment_indent
+      SaveChainInspector.log_start("#{model.class}#before_save")
     end
     klass.before_save do |model|
       next unless SaveChainInspector.enable
 
-      SaveChainInspector.decrement_indent
-      puts "#{SaveChainInspector.indent}#{model.class}#before_save end"
+      SaveChainInspector.log_end("#{model.class}#before_save")
     end
     klass.set_callback(:create, :after) do |model|
       next unless SaveChainInspector.enable
 
-      puts "#{SaveChainInspector.indent}#{model.class}#after_create start"
-      SaveChainInspector.increment_indent
+      SaveChainInspector.log_start("#{model.class}#after_create")
     end
     klass.after_create do |model|
       next unless SaveChainInspector.enable
 
-      SaveChainInspector.decrement_indent
-      puts "#{SaveChainInspector.indent}#{model.class}#after_create end"
+      SaveChainInspector.log_end("#{model.class}#after_create")
     end
     klass.set_callback(:update, :after) do |model|
       next unless SaveChainInspector.enable
 
-      puts "#{SaveChainInspector.indent}#{model.class}#after_update start"
-      SaveChainInspector.increment_indent
+      SaveChainInspector.log_start("#{model.class}#after_update")
     end
     klass.after_update do |model|
       next unless SaveChainInspector.enable
 
-      SaveChainInspector.decrement_indent
-      puts "#{SaveChainInspector.indent}#{model.class}#after_update end"
+      SaveChainInspector.log_end("#{model.class}#after_update")
     end
   end
 
@@ -122,20 +148,18 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
       if trace_point.event == :call
         if autosave_method?(trace_point) || (save_method?(trace_point) && !duplicate_save_method_call?(trace_point))
           update_last_call(trace_point)
-          puts "#{self.class.indent}#{trace_point.self.class.name}##{trace_point.method_id} start"
-          self.class.increment_indent
+          self.class.log_start(
+            "#{trace_point.self.class.name}##{trace_point.method_id}",
+            collapsible: autosave_method?(trace_point)
+          )
         end
       else # :return
         if save_method?(trace_point) && !duplicate_save_method_return?(trace_point)
-          self.class.decrement_indent
           update_last_return(trace_point)
-          puts "#{self.class.indent}#{trace_point.self.class.name}##{trace_point.method_id} end"
+          self.class.log_end("#{trace_point.self.class.name}##{trace_point.method_id}", collapsible: false)
         end
 
-        if autosave_method?(trace_point)
-          self.class.decrement_indent
-          puts "#{self.class.indent}#{trace_point.self.class.name}##{trace_point.method_id} end"
-        end
+        self.class.log_end("#{trace_point.self.class.name}##{trace_point.method_id}") if autosave_method?(trace_point)
       end
     end
   end
