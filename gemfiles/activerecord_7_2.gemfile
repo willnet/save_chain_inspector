@@ -2,9 +2,10 @@
 
 source 'https://rubygems.org'
 
-gemspec
+gemspec path: File.expand_path('..', __dir__)
 
+gem 'activerecord', '~> 7.2.0'
 gem 'rake', '~> 13.0'
 gem 'rspec', '~> 3.0'
 gem 'rubocop', '~> 1.21'
-gem 'sqlite3', '>= 2.1'
+gem 'sqlite3', '~> 1.7'

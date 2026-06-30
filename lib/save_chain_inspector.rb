@@ -3,6 +3,8 @@
 require_relative 'save_chain_inspector/version'
 
 class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentation
+  SAVE_METHODS = %i[save save!].freeze
+
   class << self
     attr_accessor :indent_count, :enable
 
@@ -83,7 +85,7 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
   end
 
   def save_method?(trace_point)
-    trace_point.method_id == :save || trace_point.method_id == :save!
+    SAVE_METHODS.include?(trace_point.method_id)
   end
 
   def duplicate_save_method_call?(trace_point)
@@ -95,8 +97,7 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
   end
 
   def autosave_to_save?(trace_point)
-    (trace_point.method_id == :save || trace_point.method_id == :save!) &&
-      last_call_method&.match?(/autosave_associated_records_for_/)
+    save_method?(trace_point) && last_call_method&.match?(/autosave_associated_records_for_/)
   end
 
   def update_last_call(trace_point)
