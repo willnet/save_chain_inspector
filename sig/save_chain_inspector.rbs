@@ -1,4 +1,13 @@
-module SaveChainInspector
+class SaveChainInspector
   VERSION: String
-  # See the writing guide of rbs: https://github.com/ruby/rbs#guides
+
+  def self.start: (?to: String | _SaveChainInspectorPath | _SaveChainInspectorOutput) { () -> untyped } -> untyped
+end
+
+interface _SaveChainInspectorPath
+  def to_path: () -> String
+end
+
+interface _SaveChainInspectorOutput
+  def puts: (*untyped) -> untyped
 end
