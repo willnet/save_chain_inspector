@@ -10,6 +10,7 @@ ActiveRecord::Schema.define do
   create_table :comments, force: true do |t|
     t.bigint :post_id
   end
+  create_table :callback_option_records, force: true
 end
 
 class Post < ActiveRecord::Base
@@ -35,4 +36,35 @@ class Comment < ActiveRecord::Base
   before_save :normalize_comment
 
   def normalize_comment; end
+end
+
+class CallbackOptionRecord < ActiveRecord::Base
+  class << self
+    def events
+      @events ||= []
+    end
+  end
+
+  before_validation :create_only_validation, on: :create
+  before_save :prepended_save, prepend: true
+  before_save :appended_save
+  around_save :around_save_callback
+
+  def create_only_validation
+    self.class.events << :create_only_validation
+  end
+
+  def prepended_save
+    self.class.events << :prepended_save
+  end
+
+  def appended_save
+    self.class.events << :appended_save
+  end
+
+  def around_save_callback
+    self.class.events << :around_before
+    yield
+    self.class.events << :around_after
+  end
 end
