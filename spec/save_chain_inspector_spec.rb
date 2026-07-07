@@ -24,7 +24,7 @@ RSpec.describe SaveChainInspector do
     OUTPUT
   end
 
-  it 'write logs inside the block' do
+  it 'writes logs inside the block' do
     expect do
       SaveChainInspector.start do
         save_post_with_comment
@@ -92,6 +92,26 @@ RSpec.describe SaveChainInspector do
 
     expect(io_like.string).to eq(expected_output)
     expect(io_like.closed?).to be(false)
+  end
+
+  it 'restores the outer output target for nested starts' do
+    Dir.mktmpdir do |dir|
+      path = File.join(dir, 'save_chain.log')
+      inner_io = StringIO.new
+
+      expect do
+        SaveChainInspector.start(to: path) do
+          SaveChainInspector.start(to: inner_io) do
+            expect(SaveChainInspector.output).to be(inner_io)
+          end
+
+          expect(SaveChainInspector.output.path).to eq(path)
+        end
+      end.not_to raise_error
+
+      expect(inner_io.string).to eq('')
+      expect(File.read(path)).to eq('')
+    end
   end
 
   it "doesn't write logs outside the block" do

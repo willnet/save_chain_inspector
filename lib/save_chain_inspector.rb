@@ -71,11 +71,13 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
     end
 
     def with_output(to)
-      self.output, close_output = output_for(to)
+      previous_output = output
+      current_output, close_output = output_for(to)
+      self.output = current_output
       yield
     ensure
-      output.close if close_output
-      self.output = nil
+      current_output.close if close_output
+      self.output = previous_output
     end
 
     def output_for(to)
