@@ -16,7 +16,33 @@ If bundler is not being used to manage dependencies, install the gem by executin
 
 `SaveChainInspector.start` takes a block. It outputs the execution order of the save chain to the standard output by default.
 
-```ruby      
+For example, given models like these:
+
+```ruby
+class Post < ApplicationRecord
+  has_many :comments
+
+  before_validation :prepare_post
+  before_save :normalize_post
+  after_create :notify_created
+
+  def prepare_post; end
+
+  def normalize_post; end
+
+  def notify_created; end
+end
+
+class Comment < ApplicationRecord
+  belongs_to :post
+
+  before_save :normalize_comment
+
+  def normalize_comment; end
+end
+```
+
+```ruby
 SaveChainInspector.start do
   post = Post.new
   post.comments.build
@@ -26,16 +52,21 @@ end
 
 ```
 Post#save start
-  Post#before_save start/end
+  Post#prepare_post start/end
+  Post#before_save start
+    Post#normalize_post start/end
+  Post#before_save end
   Post#after_create start
     Post#autosave_associated_records_for_comments start
       Comment#save start
         Comment#before_save start
           Comment#autosave_associated_records_for_post start/end
+          Comment#normalize_comment start/end
         Comment#before_save end
         Comment#after_create start/end
       Comment#save end
     Post#autosave_associated_records_for_comments end
+    Post#notify_created start/end
   Post#after_create end
 Post#save end
 ```

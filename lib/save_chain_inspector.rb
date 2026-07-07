@@ -4,6 +4,78 @@ require_relative 'save_chain_inspector/version'
 
 class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentation
   SAVE_METHODS = %i[save save!].freeze
+  SAVE_CALLBACK_NAMES = %i[validation save create update].freeze
+  CALLBACK_KINDS = %i[before after around].freeze
+  INTERNAL_CALLBACK_FILTER_PATTERNS = [
+    /\Aautosave_associated_records_for_/,
+    /\A_ensure_no_duplicate_errors\z/,
+    /\Anormalize_changed_in_place_attributes\z/,
+    /\Aaround_save_collection_association\z/
+  ].freeze
+  INTERNAL_GEM_NAMES = %w[activerecord activemodel activesupport].freeze
+
+  class CallbackLogger # :nodoc:
+    CALLBACK_METHOD_PATTERN = /\A(?:before|after|around)_(?:validation|save|create|update)\z/
+
+    def initialize(callback)
+      @callback = callback
+      @filter = callback.filter
+      @label = callback_label(@filter)
+    end
+
+    def self.wraps?(filter)
+      filter.is_a?(self)
+    end
+
+    def method_missing(method_name, target, *_args, &block)
+      return super unless callback_method?(method_name) && target
+
+      call_with_logging(target, &block)
+    end
+
+    def respond_to_missing?(method_name, include_private = false)
+      callback_method?(method_name) || super
+    end
+
+    private
+
+    def callback_method?(method_name)
+      method_name.to_s.match?(CALLBACK_METHOD_PATTERN)
+    end
+
+    def call_with_logging(target, &block)
+      logged = SaveChainInspector.enable
+      return call_original(target, &block) unless logged
+
+      label = "#{target.class}##{@label}"
+      SaveChainInspector.log_start(label)
+      call_original(target, &block)
+    ensure
+      SaveChainInspector.log_end(label) if logged
+    end
+
+    def call_original(target, &block)
+      ActiveSupport::Callbacks::CallTemplate.build(@filter, @callback).make_lambda.call(target, nil, &block)
+    end
+
+    def callback_label(filter)
+      case filter
+      when Symbol
+        filter
+      when Proc
+        block_callback_label(filter)
+      else
+        filter.class.name || filter.class.to_s
+      end
+    end
+
+    def block_callback_label(filter)
+      source_location = filter.source_location
+      return 'block_callback' unless source_location
+
+      "block_callback(#{source_location[0]}:#{source_location[1]})"
+    end
+  end
 
   class << self
     attr_accessor :indent_count, :enable, :pending_start, :output
@@ -98,11 +170,108 @@ class SaveChainInspector # rubocop:disable Metrics/ClassLength, Style/Documentat
       next if klass.instance_variable_get(:@save_chain_inspector_initialized)
 
       klass.instance_variable_set(:@save_chain_inspector_initialized, true)
+      instrument_model_callbacks(klass)
       add_hooks(klass)
     end
   end
 
   attr_accessor :last_call_method, :last_call_class, :last_return_method, :last_return_class
+
+  def instrument_model_callbacks(klass)
+    SAVE_CALLBACK_NAMES.each do |callback_name|
+      chain = klass.send(:get_callbacks, callback_name)
+      next if chain.nil? || chain.empty?
+
+      instrumented_chain = chain.dup
+      chain.each do |callback|
+        next unless instrumentable_callback?(klass, callback)
+
+        replace_callback(instrumented_chain, callback)
+      end
+      klass.send(:set_callbacks, callback_name, instrumented_chain)
+    end
+  end
+
+  def instrumentable_callback?(klass, callback)
+    CALLBACK_KINDS.include?(callback.kind) &&
+      !CallbackLogger.wraps?(callback.filter) &&
+      !internal_callback?(klass, callback)
+  end
+
+  def replace_callback(chain, callback)
+    index = chain.index(callback)
+    return unless index
+
+    wrapped_callback = ActiveSupport::Callbacks::Callback.build(
+      chain,
+      CallbackLogger.new(callback),
+      callback.kind,
+      callback_options(callback)
+    )
+    chain.delete(callback)
+    chain.insert(index, wrapped_callback)
+  end
+
+  def callback_options(callback)
+    {
+      if: callback.instance_variable_get(:@if),
+      unless: callback.instance_variable_get(:@unless)
+    }
+  end
+
+  def internal_callback?(klass, callback)
+    filter = callback.filter
+    internal_callback_filter_name?(filter) || rails_internal_callback?(klass, callback)
+  end
+
+  def internal_callback_filter_name?(filter)
+    return false unless filter.is_a?(Symbol) || filter.is_a?(String)
+
+    INTERNAL_CALLBACK_FILTER_PATTERNS.any? { |pattern| filter.to_s.match?(pattern) }
+  end
+
+  def rails_internal_callback?(klass, callback)
+    source_location = callback_source_location(klass, callback)
+    source_location && internal_gem_source?(source_location[0])
+  end
+
+  def callback_source_location(klass, callback)
+    source_location_for_callback_filter(klass, callback)
+  rescue NameError
+    nil
+  end
+
+  def source_location_for_callback_filter(klass, callback)
+    filter = callback.filter
+    case filter
+    when Symbol
+      symbol_callback_source_location(klass, filter)
+    when Proc
+      filter.source_location
+    else
+      object_callback_source_location(callback)
+    end
+  end
+
+  def symbol_callback_source_location(klass, filter)
+    klass.instance_method(filter).source_location
+  end
+
+  def object_callback_source_location(callback)
+    method_name = callback.current_scopes.join('_').to_sym
+    callback.filter.method(method_name).source_location
+  rescue NameError
+    nil
+  end
+
+  def internal_gem_source?(path)
+    return false unless path
+
+    INTERNAL_GEM_NAMES.any? do |gem_name|
+      gem_path = Gem.loaded_specs[gem_name]&.full_gem_path
+      gem_path && path.start_with?(gem_path)
+    end
+  end
 
   def add_hooks(klass) # rubocop:disable Metrics/AbcSize, Metrics/MethodLength
     klass.before_save(prepend: true) do |model|

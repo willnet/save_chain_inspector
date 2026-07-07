@@ -9,19 +9,62 @@ RSpec.describe SaveChainInspector do
   let(:expected_output) do
     <<~OUTPUT
       Post#save start
-        Post#before_save start/end
+        Post#prepare_post start/end
+        Post#before_save start
+          Post#normalize_post start/end
+        Post#before_save end
         Post#after_create start
           Post#autosave_associated_records_for_comments start
             Comment#save start
               Comment#before_save start
                 Comment#autosave_associated_records_for_post start/end
+                Comment#normalize_comment start/end
               Comment#before_save end
               Comment#after_create start/end
             Comment#save end
           Post#autosave_associated_records_for_comments end
+          Post#notify_created start/end
         Post#after_create end
       Post#save end
     OUTPUT
+  end
+
+  it "doesn't write logs for callbacks whose condition is false" do
+    expect do
+      SaveChainInspector.start do
+        Post.create
+      end
+    end.not_to output(/skipped_post_callback/).to_stdout
+  end
+
+  it 'preserves callback conditions derived from on options' do
+    string_io = StringIO.new
+    CallbackOptionRecord.events.clear
+
+    SaveChainInspector.start(to: string_io) do
+      CallbackOptionRecord.create!
+    end
+
+    expect(string_io.string).to include('CallbackOptionRecord#create_only_validation start/end')
+    expect(CallbackOptionRecord.events).to include(:create_only_validation)
+  end
+
+  it 'preserves callback conditions and order while wrapping callbacks' do
+    record = CallbackOptionRecord.create!
+    string_io = StringIO.new
+    CallbackOptionRecord.events.clear
+
+    SaveChainInspector.start(to: string_io) do
+      record.save!
+    end
+
+    expect(string_io.string).not_to include('CallbackOptionRecord#create_only_validation')
+    expect(string_io.string).to match(
+      %r{CallbackOptionRecord#prepended_save start/end.*CallbackOptionRecord#appended_save start/end}m
+    )
+    expect(string_io.string).to include('CallbackOptionRecord#around_save_callback start')
+    expect(string_io.string).to include('CallbackOptionRecord#around_save_callback end')
+    expect(CallbackOptionRecord.events).to eq(%i[prepended_save appended_save around_before around_after])
   end
 
   it 'writes logs inside the block' do
